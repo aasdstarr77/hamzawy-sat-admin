@@ -1,4 +1,4 @@
-const API = localStorage.getItem('hamzawy_api') || 'http://localhost:3000/api';
+const API = localStorage.getItem('hamzawy_api') || 'http://localhost:3000const API = localStorage.getItem('hamzawy_api') || 'https://hamzawy-sat-backend.vercel.app/';
 document.getElementById('apiLabel').textContent=API;
 const tokenKey='hamzawy_admin_token';
 const $=id=>document.getElementById(id);
