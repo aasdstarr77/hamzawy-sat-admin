@@ -1,31 +1,165 @@
-const API = localStorage.getItem('hamzawy_api') || 'http://localhost:3000const API = localStorage.getItem('hamzawy_api') || 'https://hamzawy-sat-backend.vercel.app/';
+const API = 'https://hamzawy-sat-backend.vercel.app/api';
 document.getElementById('apiLabel').textContent=API;
 const tokenKey='hamzawy_admin_token';
 const $=id=>document.getElementById(id);
-function msg(t,error=false){$('globalMsg').textContent=t;$('globalMsg').className='msg '+(error?'danger':'green');setTimeout(()=>{$('globalMsg').textContent='';},3500)}
-async function api(path,opts={}){
-  opts.headers=opts.headers||{}; if(localStorage.getItem(tokenKey)) opts.headers.Authorization='Bearer '+localStorage.getItem(tokenKey);
-  const r=await fetch(API+path,opts); const data=await r.json().catch(()=>({}));
-  if(!r.ok) throw new Error(data.error||'حدث خطأ في الاتصال'); return data;
+
+function msg(t,error=false){
+  $('globalMsg').textContent=t;
+  $('globalMsg').className='msg '+(error?'danger':'green');
+  setTimeout(()=>{$('globalMsg').textContent='';},3500)
 }
+
+async function api(path,opts={}){
+  opts.headers=opts.headers||{}; 
+  if(localStorage.getItem(tokenKey)) opts.headers.Authorization='Bearer '+localStorage.getItem(tokenKey);
+  const r=await fetch(API+path,opts); 
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error||'حدث خطأ في الاتصال'); 
+  return data;
+}
+
 async function login(){
   $('loginMsg').textContent='جاري الدخول...';
-  try{const d=await api('/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:$('loginPhone').value.trim(),password:$('loginPassword').value})});
-    if(d.user.role!=='admin') throw new Error('هذا الحساب ليس حساب أدمن'); localStorage.setItem(tokenKey,d.token); startApp();
-  }catch(e){$('loginMsg').textContent=e.message}
+  try{
+    const d=await api('/auth/login',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        phone:$('loginPhone').value.trim(),
+        password:$('loginPassword').value
+      })
+    });
+    if(d.user.role!=='admin') throw new Error('هذا الحساب ليس حساب أدمن'); 
+    localStorage.setItem(tokenKey,d.token); 
+    startApp();
+  }catch(e){
+    $('loginMsg').textContent=e.message;
+  }
 }
-function logout(){localStorage.removeItem(tokenKey);location.reload()}
-function show(id,btn){document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));$(id).classList.add('active');btn.classList.add('active')}
-function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
-async function loadDashboard(){const d=await api('/admin/dashboard');$('ordersCount').textContent=d.orders;$('availableCount').textContent=d.available_orders;$('techCount').textContent=d.technicians;$('rechargeCount').textContent=d.pending_recharges}
-async function loadOrders(){const rows=await api('/admin/orders');$('ordersList').innerHTML=rows.map(o=>`<div class="order"><div><strong>#${o.id} — ${esc(o.service)}</strong><small>العميل: ${esc(o.customer_name)} — ${esc(o.customer_phone)}<br>المنطقة: ${esc(o.area)}<br>العنوان: ${esc(o.address)}<br>المشكلة: ${esc(o.problem)}<br>الحالة: ${esc(o.status)}</small></div><div class="price"><label>سعر العميل<input id="cp${o.id}" value="${o.customer_price??''}" ${o.status==='opened'?'disabled':''}></label><label>خصم الفني<input id="tf${o.id}" value="${o.technician_fee??''}" ${o.status==='opened'?'disabled':''}></label></div><button class="primary" ${o.status==='opened'?'disabled':''} onclick="priceOrder(${o.id})">${o.status==='available'?'تحديث':'حفظ ونشر'}</button></div>`).join('')||'<p>لا توجد طلبات.</p>'}
-async function priceOrder(id){try{await api('/admin/orders/'+id+'/pricing',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customer_price:Number($('cp'+id).value),technician_fee:Number($('tf'+id).value)})});msg('تم حفظ السعر وخصم الفني ونشر الطلب.');loadOrders();loadDashboard()}catch(e){msg(e.message,true)}}
-async function loadTechs(){const rows=await api('/admin/technicians');$('techsList').innerHTML=rows.map(t=>`<div class="order"><div><strong>${esc(t.name)}</strong><small>${esc(t.phone)} — الرصيد: ${t.balance} جنيه</small></div><span class="badge ${t.approved?'green':''}">${t.approved?'معتمد':'في انتظار الاعتماد'}</span>${t.approved?'':'<button class="primary" onclick="approveTech('+t.id+')">اعتماد الفني</button>'}</div>`).join('')||'<p>لا يوجد فنيين.</p>'}
-async function approveTech(id){try{await api('/admin/technicians/'+id+'/approve',{method:'POST'});msg('تم اعتماد الفني.');loadTechs();loadDashboard()}catch(e){msg(e.message,true)}}
-async function loadRecharges(){const rows=await api('/admin/recharges');$('rechargesList').innerHTML=rows.map(r=>`<div class="order"><div><strong>${esc(r.technician_name)} — ${r.amount} جنيه</strong><small>الهاتف: ${esc(r.technician_phone)}<br>رقم العملية: ${esc(r.reference_number||'—')}<br>الحالة: ${esc(r.status)}<br>${r.receipt_path?'الإيصال مرفوع ✓':''}</small></div>${r.status==='pending'?`<div class="actions"><button class="primary" onclick="reviewRecharge(${r.id},'approve')">موافقة</button><button class="danger" onclick="reviewRecharge(${r.id},'reject')">رفض</button></div>`:''}</div>`).join('')||'<p>لا توجد طلبات شحن.</p>'}
-async function reviewRecharge(id,decision){let reason='';if(decision==='reject') reason=prompt('سبب الرفض (اختياري):')||'';try{await api('/admin/recharges/'+id+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision,rejection_reason:reason})});msg(decision==='approve'?'تمت الموافقة وإضافة الرصيد.':'تم رفض طلب الشحن.');loadRecharges();loadDashboard();loadTechs()}catch(e){msg(e.message,true)}}
-async function loadWallet(){const w=await api('/admin/wallet').catch(()=>null);if(!w){$('walletForm').innerHTML='<p>تعذر تحميل البيانات.</p>';return} $('walletForm').innerHTML=`<label>نوع المحفظة<input id="provider" value="${esc(w.provider)}"></label><label>رقم المحفظة<input id="number" value="${esc(w.wallet_number)}"></label><label>اسم صاحب المحفظة<input id="owner" value="${esc(w.owner_name)}"></label><label>التعليمات<textarea id="instructions">${esc(w.instructions)}</textarea></label><button class="primary" onclick="saveWallet()">حفظ بيانات المحفظة</button>`}
-async function saveWallet(){try{await api('/admin/wallet',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:$('provider').value,wallet_number:$('number').value,owner_name:$('owner').value,instructions:$('instructions').value})});msg('تم حفظ بيانات المحفظة.')}catch(e){msg(e.message,true)}}
-async function loadTransactions(){const rows=await api('/admin/transactions');$('transactionsList').innerHTML=rows.map(t=>`<div class="order"><div><strong>${t.type==='order_deduction'?'خصم':'شحن'} — ${t.amount} جنيه</strong><small>الفني: ${esc(t.technician_name)}${t.order_number?' — الطلب #'+t.order_number:''}<br>${esc(t.note||'')}</small></div><span>الرصيد بعد العملية: ${t.balance_after}</span></div>`).join('')||'<p>لا توجد معاملات.</p>'}
-async function startApp(){ $('login').hidden=true;$('app').hidden=false; try{const me=await api('/me');if(me.user.role!=='admin')throw new Error('الحساب ليس أدمن'); await Promise.all([loadDashboard(),loadOrders(),loadTechs(),loadRecharges(),loadWallet(),loadTransactions()]);}catch(e){localStorage.removeItem(tokenKey);$('app').hidden=true;$('login').hidden=false;$('loginMsg').textContent=e.message}}
+
+function logout(){
+  localStorage.removeItem(tokenKey);
+  location.reload();
+}
+
+function show(id,btn){
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));
+  $(id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function esc(s){
+  return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))
+}
+
+async function loadDashboard(){
+  const d=await api('/admin/dashboard');
+  $('ordersCount').textContent=d.orders;
+  $('availableCount').textContent=d.available_orders;
+  $('techCount').textContent=d.technicians;
+  $('rechargeCount').textContent=d.pending_recharges;
+}
+
+async function loadOrders(){
+  const rows=await api('/admin/orders');
+  $('ordersList').innerHTML=rows.map(o=>`<div class="order"><div><strong>#${o.id} — ${esc(o.service)}</strong><small>العميل: ${esc(o.customer_name)} — ${esc(o.customer_phone)}<br>المنطقة: ${esc(o.area)}<br>العنوان: ${esc(o.address)}<br>المشكلة: ${esc(o.problem)}<br>الحالة: ${esc(o.status)}</small></div><div class="price"><label>سعر العميل<input id="cp${o.id}" value="${o.customer_price??''}" ${o.status==='opened'?'disabled':''}></label><label>خصم الفني<input id="tf${o.id}" value="${o.technician_fee??''}" ${o.status==='opened'?'disabled':''}></label></div><button class="primary" ${o.status==='opened'?'disabled':''} onclick="priceOrder(${o.id})">${o.status==='available'?'تحديث':'حفظ ونشر'}</button></div>`).join('')||'<p>لا توجد طلبات.</p>';
+}
+
+async function priceOrder(id){
+  try{
+    await api('/admin/orders/'+id+'/pricing',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({customer_price:Number($('cp'+id).value),technician_fee:Number($('tf'+id).value)})
+    });
+    msg('تم حفظ السعر وخصم الفني ونشر الطلب.');
+    loadOrders();
+    loadDashboard();
+  }catch(e){
+    msg(e.message,true);
+  }
+}
+
+async function loadTechs(){
+  const rows=await api('/admin/technicians');
+  $('techsList').innerHTML=rows.map(t=>`<div class="order"><div><strong>${esc(t.name)}</strong><small>${esc(t.phone)} — الرصيد: ${t.balance} جنيه</small></div><span class="badge ${t.approved?'green':''}">${t.approved?'معتمد':'في انتظار الاعتماد'}</span>${t.approved?'':'<button class="primary" onclick="approveTech('+t.id+')">اعتماد الفني</button>'}</div>`).join('')||'<p>لا يوجد فنيين.</p>';
+}
+
+async function approveTech(id){
+  try{
+    await api('/admin/technicians/'+id+'/approve',{method:'POST'});
+    msg('تم اعتماد الفني.');
+    loadTechs();
+    loadDashboard();
+  }catch(e){
+    msg(e.message,true);
+  }
+}
+
+async function loadRecharges(){
+  const rows=await api('/admin/recharges');
+  $('rechargesList').innerHTML=rows.map(r=>`<div class="order"><div><strong>${esc(r.technician_name)} — ${r.amount} جنيه</strong><small>الهاتف: ${esc(r.technician_phone)}<br>رقم العملية: ${esc(r.reference_number||'—')}<br>الحالة: ${esc(r.status)}<br>${r.receipt_path?'الإيصال مرفوع ✓':''}</small></div>${r.status==='pending'?`<div class="actions"><button class="primary" onclick="reviewRecharge(${r.id},'approve')">موافقة</button><button class="danger" onclick="reviewRecharge(${r.id},'reject')">رفض</button></div>`:''}</div>`).join('')||'<p>لا توجد طلبات شحن.</p>';
+}
+
+async function reviewRecharge(id,decision){
+  let reason='';
+  if(decision==='reject') reason=prompt('سبب الرفض (اختياري):')||'';
+  try{
+    await api('/admin/recharges/'+id+'/review',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({decision,rejection_reason:reason})
+    });
+    msg(decision==='approve'?'تمت الموافقة وإضافة الرصيد.':'تم رفض طلب الشحن.');
+    loadRecharges();
+    loadDashboard();
+    loadTechs();
+  }catch(e){
+    msg(e.message,true);
+  }
+}
+
+async function loadWallet(){
+  const w=await api('/admin/wallet').catch(()=>null);
+  if(!w){
+    $('walletForm').innerHTML='<p>تعذر تحميل البيانات.</p>';
+    return;
+  }
+  $('walletForm').innerHTML=`<label>نوع المحفظة<input id="provider" value="${esc(w.provider)}"></label><label>رقم المحفظة<input id="number" value="${esc(w.wallet_number)}"></label><label>اسم صاحب المحفظة<input id="owner" value="${esc(w.owner_name)}"></label><label>التعليمات<textarea id="instructions">${esc(w.instructions)}</textarea></label><button class="primary" onclick="saveWallet()">حفظ بيانات المحفظة</button>`;
+}
+
+async function saveWallet(){
+  try{
+    await api('/admin/wallet',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({provider:$('provider').value,wallet_number:$('number').value,owner_name:$('owner').value,instructions:$('instructions').value})
+    });
+    msg('تم حفظ بيانات المحفظة.');
+  }catch(e){
+    msg(e.message,true);
+  }
+}
+
+async function loadTransactions(){
+  const rows=await api('/admin/transactions');
+  $('transactionsList').innerHTML=rows.map(t=>`<div class="order"><div><strong>${t.type==='order_deduction'?'خصم':'شحن'} — ${t.amount} جنيه</strong><small>الفني: ${esc(t.technician_name)}${t.order_number?' — الطلب #'+t.order_number:''}<br>${esc(t.note||'')}</small></div><span>الرصيد بعد العملية: ${t.balance_after}</span></div>`).join('')||'<p>لا توجد معاملات.</p>';
+}
+
+async function startApp(){
+  $('login').hidden=true;
+  $('app').hidden=false;
+  try{
+    const me=await api('/me');
+    if(me.user.role!=='admin') throw new Error('الحساب ليس أدمن');
+    await Promise.all([loadDashboard(),loadOrders(),loadTechs(),loadRecharges(),loadWallet(),loadTransactions()]);
+  }catch(e){
+    localStorage.removeItem(tokenKey);
+    $('app').hidden=true;
+    $('login').hidden=false;
+    $('loginMsg').textContent=e.message;
+  }
+}
+
 if(localStorage.getItem(tokenKey)) startApp();
